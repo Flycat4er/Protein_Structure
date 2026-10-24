@@ -1,0 +1,28 @@
+<resources>
+    <string name="app_title">Protein Structure</string>
+    <string name="search_hint">Search by ID or name</string>
+    <string name="action_toggle_theme">Toggle theme</string>
+    <string name="action_back">Back</string>
+    <string name="section_general">General Information</string>
+    <string name="section_structure">Structure Parameters</string>
+    <string name="section_authors">Authors &amp; Citation</string>
+    <string name="section_related">Related Structures</string>
+    <string name="label_pdb_id">PDB ID</string>
+    <string name="label_organism">Organism</string>
+    <string name="label_method">Method</string>
+    <string name="label_resolution">Resolution</string>
+    <string name="label_weight">Mol. Weight</string>
+    <string name="label_residues">Residues</string>
+    <string name="label_release_date">Release Date</string>
+    <string name="label_classification">Classification</string>
+    <string name="resolution_format">%1$s Å</string>
+    <string name="resolution_na">N/A (NMR)</string>
+    <string name="weight_format">%1$s kDa</string>
+    <string name="residues_format">%1$s residues</string>
+    <string name="empty_search_title">No proteins found</string>
+    <string name="empty_search_desc">Try searching by another name or PDB ID</string>
+    <string name="method_xray">X-Ray Diffraction</string>
+    <string name="method_em">Cryo-EM</string>
+    <string name="method_nmr">Solution NMR</string>
+    <string name="method_neutron">Neutron Diffraction</string>
+</resources>

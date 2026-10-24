@@ -1,0 +1,28 @@
+<resources>
+    <string name="app_title">Структуры Белков</string>
+    <string name="search_hint">Поиск по ID или названию</string>
+    <string name="action_toggle_theme">Переключить тему</string>
+    <string name="action_back">Назад</string>
+    <string name="section_general">Общая информация</string>
+    <string name="section_structure">Параметры структуры</string>
+    <string name="section_authors">Авторы и публикация</string>
+    <string name="section_related">Связанные структуры</string>
+    <string name="label_pdb_id">PDB ID</string>
+    <string name="label_organism">Организм</string>
+    <string name="label_method">Метод</string>
+    <string name="label_resolution">Разрешение</string>
+    <string name="label_weight">Мол. масса</string>
+    <string name="label_residues">Остатки</string>
+    <string name="label_release_date">Дата релиза</string>
+    <string name="label_classification">Классификация</string>
+    <string name="resolution_format">%1$s Å</string>
+    <string name="resolution_na">Н/Д (ЯМР)</string>
+    <string name="weight_format">%1$s кДа</string>
+    <string name="residues_format">%1$s а.о.</string>
+    <string name="empty_search_title">Ничего не найдено</string>
+    <string name="empty_search_desc">Попробуйте изменить поисковый запрос или PDB ID</string>
+    <string name="method_xray">Рентгеноструктурный анализ</string>
+    <string name="method_em">Криоэлектронная микроскопия</string>
+    <string name="method_nmr">ЯМР-спектроскопия</string>
+    <string name="method_neutron">Нейтронография</string>
+</resources>
