@@ -50,34 +50,8 @@ class ProteinRepositoryImpl(
     ): List<Protein> = withContext(Dispatchers.Default) {
         val trimmed = query?.trim()
 
-        // Первый экран без поискового фильтра: отдаем канонические белки
-        if (trimmed.isNullOrBlank() && page == 0) {
-            val ids = DEFAULT_ENTRY_IDS
-            return@withContext coroutineScope {
-                ids.map { id ->
-                    async {
-                        try {
-                            getProtein(id)
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (_: Exception) {
-                            null
-                        }
-                    }
-                }.awaitAll().filterNotNull()
-            }
-        }
-
-        // Поиск по конкретному 4-символьному PDB ID:
-        if (!trimmed.isNullOrBlank() && PDB_ID_REGEX.matches(trimmed)) {
-            if (page > 0) return@withContext emptyList()
-            return@withContext try {
-                listOf(getProtein(trimmed.uppercase()))
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                emptyList()
-            }
+        if (!trimmed.isNullOrBlank() && PDB_ID_REGEX.matches(trimmed) && page > 0) {
+            return@withContext emptyList()
         }
 
         val jsonQuery = buildSearchQueryJson(trimmed, page, pageSize)
@@ -97,7 +71,7 @@ class ProteinRepositoryImpl(
                 return@withContext emptyList()
             }
 
-            coroutineScope {
+            val proteins = coroutineScope {
                 ids.map { id ->
                     async {
                         try {
@@ -110,6 +84,12 @@ class ProteinRepositoryImpl(
                     }
                 }.awaitAll().filterNotNull()
             }
+
+            if (ids.isNotEmpty() && proteins.isEmpty()) {
+                throw IllegalStateException("Failed to load protein details from network")
+            }
+
+            proteins
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -248,8 +228,15 @@ class ProteinRepositoryImpl(
 
     private fun buildSearchQueryJson(query: String?, page: Int, pageSize: Int): String {
         return if (query.isNullOrBlank()) {
-            val start = DEFAULT_ENTRY_IDS.size + (page - 1) * pageSize
-            """{"query":{"type":"terminal","service":"text","parameters":{"attribute":"rcsb_entry_info.selected_polymer_entity_types","operator":"exact_match","value":"Protein (only)"}},"return_type":"entry","request_options":{"paginate":{"start":$start,"rows":$pageSize},"sort":[{"sort_by":"rcsb_accession_info.initial_release_date","direction":"desc"}]}}"""
+            if (page == 0) {
+                val idsJson = DEFAULT_ENTRY_IDS.joinToString(separator = "\", \"", prefix = "[\"", postfix = "\"]")
+                """{"query":{"type":"terminal","service":"text","parameters":{"attribute":"rcsb_entry_container_identifiers.entry_id","operator":"in","value":$idsJson}},"return_type":"entry"}"""
+            } else {
+                val start = DEFAULT_ENTRY_IDS.size + (page - 1) * pageSize
+                """{"query":{"type":"terminal","service":"text","parameters":{"attribute":"rcsb_entry_info.selected_polymer_entity_types","operator":"exact_match","value":"Protein (only)"}},"return_type":"entry","request_options":{"paginate":{"start":$start,"rows":$pageSize},"sort":[{"sort_by":"rcsb_accession_info.initial_release_date","direction":"desc"}]}}"""
+            }
+        } else if (PDB_ID_REGEX.matches(query)) {
+            """{"query":{"type":"terminal","service":"text","parameters":{"attribute":"rcsb_entry_container_identifiers.entry_id","operator":"exact_match","value":"${query.uppercase()}"}},"return_type":"entry"}"""
         } else {
             val start = page * pageSize
             val escaped = query.replace("\\", "\\\\").replace("\"", "\\\"")
