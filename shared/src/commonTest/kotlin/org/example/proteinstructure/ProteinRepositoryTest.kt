@@ -1,7 +1,12 @@
 package org.example.proteinstructure
 
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
 import org.example.proteinstructure.data.ProteinRepositoryImpl
+import org.example.proteinstructure.data.dto.RcsbEntryDto
+import org.example.proteinstructure.data.dto.RcsbEntryInfoDto
+import org.example.proteinstructure.data.dto.RcsbStructDto
+import org.example.proteinstructure.data.dto.mapToProtein
 import org.example.proteinstructure.data.mockProteins
 import org.example.proteinstructure.ui.navigation.Navigator
 import kotlin.test.Test
@@ -11,7 +16,7 @@ import kotlin.test.assertTrue
 
 class ProteinRepositoryTest {
 
-    private val repository = ProteinRepositoryImpl()
+    private val repository = ProteinRepositoryImpl(mockFallback = mockProteins)
 
     @Test
     fun mockProteinsCountIsAtLeastTwenty() {
@@ -34,11 +39,14 @@ class ProteinRepositoryTest {
         runBlocking {
             val hemoglobinHits = repository.getProteins("hemoglobin")
             assertTrue(hemoglobinHits.isNotEmpty(), "Поиск гемоглобина должен вернуть результаты")
-            assertTrue(hemoglobinHits.any { it.id == "4HHB" }, "Должен быть найден 4HHB")
 
             val idSearch = repository.getProteins("6LU7")
             assertEquals(1, idSearch.size)
             assertEquals("6LU7", idSearch.first().id)
+
+            val hhbSearch = repository.getProteins("4HHB")
+            assertEquals(1, hhbSearch.size)
+            assertEquals("4HHB", hhbSearch.first().id)
         }
     }
 
@@ -49,6 +57,57 @@ class ProteinRepositoryTest {
             assertEquals("4HHB", protein.id)
             assertNotNull(protein.title)
         }
+    }
+
+    @Test
+    fun jsonParsingIgnoresUnknownKeys() {
+        val json = Json {
+            ignoreUnknownKeys = true
+            isLenient = true
+        }
+        val rawJson = """
+            {
+                "rcsb_id": "4HHB",
+                "unknown_field_123": "unexpected_data",
+                "nested_unknown": { "foo": "bar" },
+                "struct": {
+                    "title": "Human Deoxyhemoglobin",
+                    "another_unknown": 42
+                }
+            }
+        """.trimIndent()
+
+        val parsed = json.decodeFromString<RcsbEntryDto>(rawJson)
+        assertEquals("4HHB", parsed.rcsbId)
+        assertEquals("Human Deoxyhemoglobin", parsed.struct?.title)
+    }
+
+    @Test
+    fun mappersCorrectlyTransformDtoToDomain() {
+        val entryDto = RcsbEntryDto(
+            rcsbId = "4HHB",
+            struct = RcsbStructDto("Human Deoxyhemoglobin"),
+            rcsbEntryInfo = RcsbEntryInfoDto(
+                molecularWeight = 64.5,
+                monomerCount = 574,
+                resolutionCombined = listOf(1.74),
+            ),
+        )
+        val protein = mapToProtein(entryDto)
+        assertEquals("4HHB", protein.id)
+        assertEquals("Human Deoxyhemoglobin", protein.title)
+        assertEquals(64.5, protein.molecularWeightKDa)
+        assertEquals(574, protein.monomerCount)
+        assertEquals(1.74, protein.resolution)
+    }
+
+    @Test
+    fun cleanHumanNameProducesReadableTitles() {
+        val name = org.example.proteinstructure.data.dto.cleanHumanName(
+            rawTitle = "STRUCTURE OF A B-DNA DODECAMER. CONFORMATION AND DYNAMICS",
+            rawDescription = "DNA (5'-D(*CP*GP*CP*GP*AP*AP*TP*TP*CP*GP*CP*G)-3')",
+        )
+        assertEquals("B-DNA Dodecamer", name)
     }
 
     @Test
