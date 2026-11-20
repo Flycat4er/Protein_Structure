@@ -53,7 +53,7 @@ fun AppNavDisplay(
                     extras = ProteinDetailViewModelFactory.extrasFor(key.id),
                 )
                 val state by viewModel.state.collectAsStateWithLifecycle()
-                state?.let { ProteinDetailScreen(protein = it, onIntent = viewModel::onIntent) }
+                ProteinDetailScreen(state = state, onIntent = viewModel::onIntent)
             }
         },
     )
