@@ -1,8 +1,10 @@
 package org.example.proteinstructure.ui.model
 
+import androidx.compose.runtime.Immutable
 import org.example.proteinstructure.domain.Protein
 import org.example.proteinstructure.domain.ProteinMethod
 
+@Immutable
 data class ProteinDetailUi(
     val id: String,
     val name: String,

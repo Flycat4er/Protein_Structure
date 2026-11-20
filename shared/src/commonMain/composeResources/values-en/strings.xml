@@ -25,4 +25,7 @@
     <string name="method_em">Cryo-EM</string>
     <string name="method_nmr">Solution NMR</string>
     <string name="method_neutron">Neutron Diffraction</string>
+    <string name="error_loading_title">Data Loading Error</string>
+    <string name="error_loading_desc">Failed to fetch data from the network. Please check your internet connection.</string>
+    <string name="action_retry">Retry</string>
 </resources>

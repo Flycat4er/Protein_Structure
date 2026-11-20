@@ -25,4 +25,7 @@
     <string name="method_em">Криоэлектронная микроскопия</string>
     <string name="method_nmr">ЯМР-спектроскопия</string>
     <string name="method_neutron">Нейтронография</string>
+    <string name="error_loading_title">Ошибка загрузки данных</string>
+    <string name="error_loading_desc">Не удалось загрузить данные из сети. Проверьте подключение к интернету.</string>
+    <string name="action_retry">Повторить</string>
 </resources>
