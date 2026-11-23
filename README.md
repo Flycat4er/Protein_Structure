@@ -1,29 +1,86 @@
-# Структуры белков — каркас на Compose Multiplatform
+# Структуры белков — приложение на Compose Multiplatform
 
-Учебное кроссплатформенное приложение по базе данных пространственных структур белков и макромолекул (RCSB PDB).
-Веха В1: каркас приложения на Compose Multiplatform, без сети.
+Кроссплатформенное приложение для исследования пространственных структур белков и макромолекул на базе публичного API Protein Data Bank (RCSB PDB).  
+**Веха В2:** интеграция с сетью (Ktor 3, kotlinx.serialization, пагинация, параллельная загрузка и кэширование).
+
+---
 
 ## Предметная область
 
-Каталог пространственных структур белков. Источник данных — [search.rcsb.org](https://search.rcsb.org/rcsbsearch/v2/query) (RCSB Protein Data Bank), публичное REST API без авторизации.
+Каталог пространственных структур макромолекул. Источник данных — официальное REST API [RCSB Protein Data Bank](https://search.rcsb.org/index.html):
+- **Search API v2:** `https://search.rcsb.org/rcsbsearch/v2/query` (полнотекстовый поиск, фильтрация по атрибутам, пагинация, полимерные сущности).
+- **Data API v1 Core:** `https://data.rcsb.org/rest/v1/core` (детальные метаданные структур `entry/{id}` и полимерных сущностей `polymer_entity/{entry_id}/{entity_id}`).
 
-Сущности домена:
+### Сущности домена
 
 | Сущность | Что описывает | Ключевые поля |
 |---|---|---|
-| `Protein` | пространственная структура белка / макромолекулы | PDB ID, краткое и полное название, организм-источник, классификация, метод исследования, разрешение, масса (кДа), число мономеров, дата релиза, авторы, связанные PDB ID |
-| `ProteinMethod` | метод экспериментального определения структуры | X-ray diffraction, Cryo-Electron Microscopy, Solution NMR, Neutron diffraction, Other |
+| `Protein` | Пространственная структура белка / макромолекулы | PDB ID, краткое и полное название, организм-источник, классификация, метод исследования, разрешение, масса (кДа), число мономеров, дата релиза, авторы, цитирование, связанные PDB ID |
+| `ProteinMethod` | Метод экспериментального определения структуры | `XRAY` (Рентгеноструктурный анализ), `ELECTRON_MICROSCOPY` (Крио-ЭМ), `NMR` (ЯМР-спектроскопия), `NEUTRON` (Нейтронография), `OTHER` |
 
-Экраны:
+### Экраны приложения
 
-- **Список белков** — 24 записи, поиск по PDB ID, названию и организму. У карточки видны PDB ID, краткое название, организм, бейдж метода и разрешение со цветовой шкалой качества.
-- **Карточка белка** — подробное досье: полное название, PDB ID, классификация, организм, метод исследования, разрешение (Å), молекулярная масса, число мономеров/остатков, дата депонирования и авторы. Ниже блок «Связанные структуры»: родственные и похожие PDB-записи, каждая из которых открывается как новый экран со своим шагом в бэкстеке.
+- **Список белков (Каталог):**
+  - Бесконечный скролл (пагинация) с динамической подгрузкой следующих страниц при прокрутке.
+  - Поиск в реальном времени по PDB ID, названию белка или организму.
+  - На карточке отображаются: PDB ID, человекочитаемое название, организм, классификация, масса, количество мономеров, цветной бейдж метода и бейдж разрешения со шкалой качества.
+  - Состояния: начальная загрузка (`CircularProgressIndicator`), пустая поисковая выдача, индикатор подгрузки следующей страницы внизу списка, экран сетевой ошибки с кнопкой «Повторить».
+- **Детали структуры (Карточка белка):**
+  - Подробные параметры: PDB ID, полное наименование, классификация, организм, метод, разрешение (Å), молекулярная масса (кДа), количество аминокислотных остатков, дата депонирования.
+  - Блок авторов исследования и название первичной публикации.
+  - Блок «Связанные структуры» (полимерные сущности, полученные запросом `return_type: "polymer_entity"`): родственные субъединицы и комплексы, каждый из которых открывается как самостоятельный экран в бэкстеке навигации.
+  - Обработка сетевых ошибок с возможностью повтора запроса.
 
-В В1 сети нет: данные лежат в моках в форме ответов API RCSB PDB Search v2 / Data API. В В2 моки заменит сеть, а домен и UI останутся прежними.
+---
+
+## Архитектура и технические решения (Веха В2)
+
+1. **Мультиплатформенный HTTP-клиент (Ktor Client 3):**
+   - Механизм `expect`/`actual` для сборки под каждую целевую платформу:
+     - **JVM (Desktop):** `OkHttp` (`io.ktor:ktor-client-okhttp`)
+     - **Android:** `OkHttp` (`io.ktor:ktor-client-okhttp`) + сетевое разрешение `android.permission.INTERNET`
+     - **Web (WasmJS / JS):** `Js` (`io.ktor:ktor-client-js`)
+     - **iOS:** `Darwin` (`io.ktor:ktor-client-darwin`)
+   - Единая фабрика клиента `HttpClientFactory` с установленным плагином `ContentNegotiation`.
+
+2. **Сериализация и изоляция моделей (`kotlinx.serialization`):**
+   - Модели сетевого ответа (DTO: `RcsbSearchResponseDto`, `RcsbEntryDto`, `RcsbPolymerEntityResponseDto`) строго изолированы от доменной модели `Protein` и UI-моделей экрана.
+   - Парсер сконфигурирован с `ignoreUnknownKeys = true` и `isLenient = true`, защищая приложение от поломок при изменении и расширении схемы внешнего API RCSB.
+
+3. **Корутины и безопасность отмены (`CancellationException`):**
+   - Все сетевые операции оформлены как `suspend`-функции в интерфейсе `ProteinRepository`.
+   - Исключение `CancellationException` нигде не проглатывается широкими блоками `catch (e: Exception)` и явно пробрасывается дальше (`throw e`). Быстрый ввод в строке поиска отменяет предыдущий Job без отображения ложной ошибки.
+
+4. **Вынос тяжёлых операций с главного потока:**
+   - Сетевые запросы, разбор JSON-ответов, маппинг и склейка страниц (`items + newItems`) выполняются на диспетчере `Dispatchers.Default` внутри `withContext`. Главный UI-поток не блокируется.
+
+5. **Бесконечный список и пагинация:**
+   - Постраничная загрузка (`page`, `pageSize`).
+   - На первом экране выдаются канонические структуры предметной области; при прокрутке запрашиваются следующие страницы из базы RCSB.
+   - При текстовом поиске пагинация запрашивает соответствующие страницы поисковой выдачи.
+
+6. **Стабильность UI (`restartable skippable`):**
+   - Классы состояний экранов (`ProteinListState`, `ProteinDetailState`) и UI-модели (`ProteinCardUi`, `ProteinDetailUi`) аннотированы `@Immutable`, гарантируя пропуск избыточных рекомпозиций Compose при частых обновлениях потока данных.
+
+7. **Человекочитаемые наименования (Smart Name Cleaning):**
+   - Алгоритм `cleanHumanName` очищает сырые формулы нуклеотидных цепочек (`5'-D(...)`), отсекает технические префиксы статей (*"The crystal structure of..."*, *"Cryo-EM structure of..."*) и суффиксы разрешения, приводя заголовки к аккуратному Title Case с сохранением биологических акронимов (*DNA*, *RNA*, *GFP*, *NMR*, *SARS*, *COVID*).
+   - Синтетические конструкции корректно идентифицируются как `Synthetic construct`, без ложного отнесения к `Homo sapiens`.
+
+8. **Конфигурация без захардкоженных адресов:**
+   - Базовые URL API вынесены в `gradle.properties` (`rcsb.search.url`, `rcsb.data.url`).
+   - На этапе сборки Gradle-задача `generateBuildConfig` формирует типобезопасный объект `BuildConfig` в `build/generated/buildconfig`.
+
+9. **Кэширование в памяти:**
+   - Потокобезопасный in-memory кэш на базе `Mutex` и `MutableMap<String, Protein>`. Данные на диск не сохраняются (в соответствии с ограничениями вехи).
+
+10. **Интернационализация и темы:**
+    - Строковые ресурсы в `composeResources` с паритетом ключей (RU / EN), переключение языка и темы (светлая/тёмная на токенах Material 3) на лету.
+
+---
 
 ## Быстрый запуск
 
-Нужен JDK 17 или выше (протестировано на JDK 17 и 21). Остальное Gradle скачает сам, первый sync может занять некоторое время.
+Требуется JDK 17 или выше (протестировано на JDK 17 и OpenJDK 21).
 
 ### 1. Запуск десктопного приложения (основной таргет)
 ```bash
@@ -36,7 +93,7 @@
 ./gradlew :desktopApp:run -Plocale=en
 ```
 
-### 3. Запуск веб-приложения (Wasm / JS)
+### 3. Запуск веб-приложения (WasmJS / WebAssembly)
 ```bash
 ./gradlew :webApp:wasmJsBrowserDevelopmentRun
 ```
@@ -45,10 +102,13 @@
 ./gradlew :webApp:jsBrowserDevelopmentRun
 ```
 
-### 4. Сборка Android-приложения (нужен настроенный Android SDK)
+### 4. Сборка Android-приложения (APK)
 ```bash
 ./gradlew :androidApp:assembleDebug
 ```
+*Собранный APK: `androidApp/build/outputs/apk/debug/androidApp-debug.apk`*
+
+---
 
 ## Демонстрация работы
 
@@ -64,53 +124,64 @@
 | :---: |
 |<img width="480" height="854" alt="android-app" src="https://github.com/user-attachments/assets/883b9797-f781-47c0-8e17-60d6f868cccb" />|
 
-## Проверки
+---
 
-Паритет ключей в локалях:
+## Проверки и качество кода
 
+Паритет строковых ресурсов в локалях (0 расхождений):
 ```bash
 python tools/check-strings.py
 ```
 
-Отчёт компилятора Compose о стабильности и пропуске рекомпозиции (после сборки лежит в `shared/build/compose_compiler/`):
-
-```bash
-./gradlew :shared:compileKotlinJvm
-```
-
-Запуск unit-тестов репозитория и навигации:
-
+Запуск unit-тестов (проверка DTO, `ignoreUnknownKeys`, маппинга, очистки названий и репозитория):
 ```bash
 ./gradlew :shared:jvmTest
 ```
 
-## Структура
+Компиляция таргетов для проверки сборки:
+```bash
+./gradlew :shared:compileKotlinJvm :shared:compileAndroidMain :webApp:compileKotlinWasmJs
+```
 
-| Путь | Что внутри |
+---
+
+## Структура проекта
+
+| Модуль / Каталог | Назначение |
 |---|---|
-| `shared/src/commonMain/kotlin/.../domain` | сущности `Protein`, `ProteinMethod` и интерфейс `ProteinRepository` без деталей транспорта |
-| `shared/src/commonMain/kotlin/.../data` | моки (24 структуры в форме ответа RCSB PDB) и реализация репозитория |
-| `shared/src/commonMain/kotlin/.../list`, `.../detail` | состояние, намерения и ViewModel экранов (MVI) |
-| `shared/src/commonMain/kotlin/.../ui/screens` | composable-экраны списка и детали, рисуются из состояния |
-| `shared/src/commonMain/kotlin/.../ui/navigation` | маршруты `Screen`, бэкстек `Navigator` и контейнер переходов `AppNavDisplay` |
-| `shared/src/commonMain/kotlin/.../ui/model` | UI-модели карточки и деталей, мапперы из домена |
-| `shared/src/commonMain/kotlin/.../ui/components` | переиспользуемые компоненты (шапка со слотом действий, бейджи, подложки) |
-| `shared/src/commonMain/kotlin/.../ui` | тема `AppTheme` на токенах Material 3 и семантические цвета `SemanticColors` |
-| `shared/src/.../Platform.*.kt` | платформенные реализации определения и смены локали (включая JS/Wasm интероп) |
-| `shared/src/commonMain/composeResources` | строковые ресурсы интерфейса (`values/strings.xml`, `values-en/strings.xml`) и векторные иконки |
-| `tools/check-strings.py` | сверка ключей локалей |
+| `shared/src/commonMain/kotlin/.../domain` | Сущности `Protein`, `ProteinMethod` и контракт репозитория `ProteinRepository` |
+| `shared/src/commonMain/kotlin/.../data` | Реализация `ProteinRepositoryImpl` (сеть RCSB, пагинация, in-memory кэш) |
+| `shared/src/commonMain/kotlin/.../data/network` | Фабрика `HttpClientFactory` и `expect fun createHttpClientEngine()` |
+| `shared/src/*/kotlin/.../data/network` | Платформенные движки Ktor (`actual fun createHttpClientEngine()`: OkHttp / Js / Darwin) |
+| `shared/src/commonMain/kotlin/.../data/dto` | DTO-модели (`RcsbSearchDto`, `RcsbEntryDto`, `RcsbPolymerEntityDto`) и мапперы `Mappers.kt` |
+| `shared/src/commonMain/kotlin/.../list` | Состояние `ProteinListState`, намерения `ProteinListIntent` и `ProteinListViewModel` |
+| `shared/src/commonMain/kotlin/.../detail` | Состояние `ProteinDetailState`, намерения `ProteinDetailIntent` и `ProteinDetailViewModel` |
+| `shared/src/commonMain/kotlin/.../ui/screens` | Composable-экраны каталога и деталей с состояниями загрузки/ошибки |
+| `shared/src/commonMain/kotlin/.../ui/navigation` | Навигация Navigation 3: маршруты `Screen`, бэкстек `Navigator`, хост `AppNavDisplay` |
+| `shared/src/commonMain/kotlin/.../ui/model` | UI-модели `ProteinCardUi`, `ProteinDetailUi` (аннотированы `@Immutable`) |
+| `shared/src/commonMain/kotlin/.../ui/components` | UI-компоненты: `AppScaffold`, карточки, `MethodBadge`, `ResolutionBadge`, секции |
+| `shared/src/commonMain/kotlin/.../ui` | Тема `AppTheme` (Material 3 токены) и семантические цвета `SemanticColors` |
+| `shared/src/commonMain/composeResources` | Ресурсы строк (`values/strings.xml`, `values-en/strings.xml`) и векторная графика |
+| `androidApp/` | Точка входа Android (Activity, Manifest с разрешением `INTERNET`) |
+| `desktopApp/` | Точка входа Desktop JVM (`Main.kt`) |
+| `webApp/` | Точка входа WebAssembly WasmJS и JS (`main.kt`, `index.html`) |
+| `tools/check-strings.py` | Скрипт верификации паритета локалей |
 
-## Технические решения
+---
 
-- **Навигация** — Navigation 3, мультиплатформенная сборка UI-части (`org.jetbrains.androidx.navigation3:navigation3-ui`). Маршрут — объект: `sealed interface Screen` (`Screen.List`, `Screen.Detail`). Бэкстек — реактивный список в `StateFlow` внутри `Navigator`. Заданы анимации перехода и возврата (`popEnterTransition`, `popExitTransition`).
-- **Состояние** — MVI: вниз в composable уходят только состояние и колбэк намерений, ViewModel целиком не передаётся (сохраняет функции `restartable skippable`).
-- **Тема** — токены `MaterialTheme`, светлая и тёмная схемы. Ни одного зашитого hex-цвета в поверхностях. Семантические цвета (метод исследования и шкала разрешения) не зависят от темы.
-- **Подписи** — `composeResources`, две локали (`ru`, `en`). Язык и тема переключаются в шапке и живут в памяти сессии. Для Web реализован динамический JS-интероп для актуализации `navigator.languages`.
-- **Данные каталога не переводятся**: названия белков, PDB ID и организмы остаются на английском, как в базе RCSB PDB.
+## Статус вехи В2 и дальнейшие шаги
 
-## Ограничения вехи В1
+- [x] **Асинхронность на корутинах** (`suspend`-функции, `StateFlow`, без колбэков).
+- [x] **`CancellationException` не проглочена** (отмена запроса не перехватывается как ошибка сети).
+- [x] **Клиент собран под каждый таргет** (`expect`/`actual` Ktor-клиенты для JVM, Android, WasmJS, JS, iOS).
+- [x] **Разбор ответа — `kotlinx.serialization`** (изолированные DTO, `ignoreUnknownKeys = true`).
+- [x] **Тяжёлые вычисления вне UI-потока** (парсинг, маппинг и склейка страниц на `Dispatchers.Default`).
+- [x] **Экраны `restartable skippable`** (`@Immutable` модели и состояния).
+- [x] **Бесконечный скролл (пагинация)** каталога с индикатором дозагрузки.
+- [x] **Кэш только в памяти** (без сохранения на диск, персистентность — задача В3).
+- [x] **Отсутствие хардкода адресов** (конфигурация через `gradle.properties` и автогенерация `BuildConfig`).
 
-- Нет сети и постоянного локального хранилища: тема, язык и поисковый запрос живут только в памяти сессии.
-- Данные каталога берутся из локальных моков (24 записи).
-- Нет адаптива под ширину окна, deep links и адресной строки браузера — это В3.
-- iOS-таргет сконфигурирован в проекте, но сборка требует macOS и Xcode.
+### Задачи следующей вехи (В3):
+- Персистентность и офлайн-режим (локальная база данных Room / SQLDelight, синхронизация).
+- Адаптивная верстка под ширину экрана (планшеты и десктопные окна с раздельными панелями Master-Detail).
+- Интеграция глубоких ссылок (Deep Links) и адресной строки браузера.
